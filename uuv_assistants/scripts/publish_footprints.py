@@ -7,30 +7,34 @@ from copy import deepcopy
 
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import PolygonStamped, Point32
+
 from tf_quaternion.transformations import euler_from_quaternion
 
 class PublishFootprints(Node):
     def __init__(self):
         super().__init__('publish_footprints')
-        self.vehicle_pub = dict()   # Dictionary for publishers keyed by model name.
-        self.odom_sub = dict()      # Dictionary for subscribers.
+        self.vehicle_pub = dict()   # Dictionary for publishers, keyed by topic name.
+        self.odom_sub = dict()      # Dictionary for subscriptions.
         self.marker = np.array([[0, 0.75], [-0.5, -0.25], [0.5, -0.25]])
-        # Timer to update vehicle list (dynamic model discovery not implemented)
+        # Call update_vehicle_list every 10 seconds to discover new odometry topics.
         self.create_timer(10.0, self.update_vehicle_list)
 
     def rot(self, alpha):
         return np.array([[np.cos(alpha), -np.sin(alpha)],
                          [np.sin(alpha),  np.cos(alpha)]])
-    
-    def odometry_callback(self, msg, name):
-        if name not in self.vehicle_pub:
+
+    def odometry_callback(self, msg, topic):
+        # Use the topic name (or a derived robot name) as a key.
+        if topic not in self.vehicle_pub:
             return
         x = msg.pose.pose.position.x
         y = msg.pose.pose.position.y
-        orientation = [msg.pose.pose.orientation.x,
-                       msg.pose.pose.orientation.y,
-                       msg.pose.pose.orientation.z,
-                       msg.pose.pose.orientation.w]
+        orientation = [
+            msg.pose.pose.orientation.x,
+            msg.pose.pose.orientation.y,
+            msg.pose.pose.orientation.z,
+            msg.pose.pose.orientation.w
+        ]
         yaw = euler_from_quaternion(orientation)[2]
         new_marker = deepcopy(self.marker)
         points = []
@@ -46,12 +50,31 @@ class PublishFootprints(Node):
         new_poly.header.stamp = self.get_clock().now().to_msg()
         new_poly.header.frame_id = 'world'
         new_poly.polygon.points = points
-        self.vehicle_pub[name].publish(new_poly)
+        # Publish on the publisher associated with this topic
+        self.vehicle_pub[topic].publish(new_poly)
 
     def update_vehicle_list(self):
-        # In ROS2, dynamic topic discovery must use rclpy APIs.
-        # For now, we simply log that this function was called.
-        self.get_logger().info("update_vehicle_list called. Dynamic model discovery is not implemented.")
+        # Retrieve all active topics and their types
+        topics_and_types = self.get_topic_names_and_types()
+        for topic, type_list in topics_and_types.items():
+            # Skip system topics
+            if topic.startswith('/rosout'):
+                continue
+            # Check if the topic is of type Odometry
+            if 'nav_msgs/msg/Odometry' in type_list:
+                if topic not in self.odom_sub:
+                    self.get_logger().info(f"Discovered new Odometry topic: {topic}")
+                    # Create a subscription to the new odometry topic
+                    sub = self.create_subscription(
+                        Odometry,
+                        topic,
+                        lambda msg, t=topic: self.odometry_callback(msg, t),
+                        10)
+                    self.odom_sub[topic] = sub
+                    # Create a corresponding publisher for the vehicle footprint
+                    pub_topic = topic + '/footprint'
+                    pub = self.create_publisher(PolygonStamped, pub_topic, 10)
+                    self.vehicle_pub[topic] = pub
 
 def main(args=None):
     rclpy.init(args=args)
