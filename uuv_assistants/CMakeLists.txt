@@ -36,17 +36,24 @@ install(TARGETS uuv_message_to_tf
   RUNTIME DESTINATION lib/${PROJECT_NAME}
 )
 
-# # Install Python scripts as executables
-# install(PROGRAMS
-#   scripts/publish_footprints.py
-#   scripts/set_simulation_timer.py
-#   scripts/publish_world_models.py
-#   scripts/publish_vehicle_footprint.py
-#   scripts/unpause_simulation.py
-#   scripts/create_new_robot_model
-#   scripts/create_thruster_manager_configuration
-#   DESTINATION lib/${PROJECT_NAME}
-# )
+# Install Python scripts as executables
+install(PROGRAMS
+  scripts/publish_footprints.py
+  scripts/set_simulation_timer.py
+  scripts/publish_world_models.py
+  scripts/publish_vehicle_footprint.py
+  scripts/unpause_simulation.py
+  scripts/create_new_robot_model
+  scripts/create_thruster_manager_configuration
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+# Install the local Python module (tf_quaternion) so that it can be imported via:
+# "from tf_quaternion.transformations import euler_from_quaternion"
+install(DIRECTORY src/tf_quaternion
+  DESTINATION lib/${PROJECT_NAME}
+  FILES_MATCHING PATTERN "*.py"
+)
 
 # Install launch files (assuming they have been converted to ROS2 Python launch files)
 install(DIRECTORY launch

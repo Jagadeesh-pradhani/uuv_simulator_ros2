@@ -1,0 +1,57 @@
+#!/usr/bin/env python3
+import os
+import sys
+import argparse
+from rospkg import RosPack
+
+# No roslib.load_manifest in ROS2.
+ROSPACK_INST = RosPack()
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(
+        description="Create new ament package for a UUV control configuration")
+    parser.add_argument('--robot_name', type=str, required=True)
+    parser.add_argument('--output_dir', type=str, default=None)
+    args = parser.parse_args(sys.argv[1:])
+
+    if args.robot_name is None:
+        print('No robot name given!')
+        sys.exit(-1)
+
+    if args.output_dir is None:
+        output_dir = args.robot_name + '_control'
+        print(f'Creating ament package {output_dir} for the thruster manager configuration')
+        if os.path.exists(output_dir):
+            print('Package already exists!')
+            sys.exit(-1)
+        print('Creating the package...')
+        os.system('ros2 pkg create ' + output_dir + ' --build-type ament_cmake')
+        if not os.path.isdir(output_dir):
+            print('Package could not be created')
+            sys.exit(-1)
+        print('Done!')
+    else:
+        output_dir = args.output_dir
+
+    print('Create new ament package for a UUV control configuration')
+    print(f'\tRobot name = {args.robot_name}')
+    print(f'\tOutput directory = {output_dir}')
+
+    template_path = os.path.join(ROSPACK_INST.get_path('uuv_assistants'),
+                                 'templates', 'thruster_manager_config')
+    for d in os.listdir(template_path):
+        new_folder = os.path.join(output_dir, d)
+        os.makedirs(new_folder, exist_ok=True)
+        print('Creating folder=' + new_folder)
+        for f in os.listdir(os.path.join(template_path, d)):
+            print('Creating file:')
+            filename = os.path.join(output_dir, d, f.replace('.template', ''))
+            print('\t' + filename)
+            with open(os.path.join(template_path, d, f), 'r') as d_file:
+                content = d_file.read()
+            content = content.replace('$ROBOT_NAME', args.robot_name)\
+                             .replace('$CATKIN_PACKAGE', output_dir)
+            with open(filename, 'w') as output_file:
+                output_file.write(content)
+
+    print(f'Thruster manager configuration <{output_dir}> created successfully')
